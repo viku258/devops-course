@@ -11,6 +11,7 @@ build_job:
   stage: build
   image: eclipse-temurin:17-jdk-alpine
   script:
+    - cd spring-petclinic-microservices
     - >-
       ./mvnw compile
       -Dhttps.protocols=TLSv1.2
