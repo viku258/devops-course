@@ -13,7 +13,6 @@ build_job:
   stage: build
   image: eclipse-temurin:17-jdk-alpine
   script:
-    - chmod +x ./mvnw
     - ./mvnw compile
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
@@ -26,7 +25,6 @@ test_job:
   stage: test
   image: eclipse-temurin:17-jdk-alpine
   script:
-    - chmod +x ./mvnw
     - ./mvnw test
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
@@ -57,21 +55,18 @@ package_job:
   stage: package
   image: eclipse-temurin:17-jdk-alpine
   services:
-    - name: docker:dind
-      alias: docker
+    - docker:dind
   variables:
     DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
   script:
-    - chmod +x ./mvnw
-    - apk add --no-cache docker-cli docker-cli-compose curl
-    # Install docker buildx
-    - mkdir -p ~/.docker/cli-plugins
-    - curl -sSL https://github.com/docker/buildx/releases/download/v0.14.1/buildx-v0.14.1.linux-amd64 -o ~/.docker/cli-plugins/docker-buildx
-    - chmod +x ~/.docker/cli-plugins/docker-buildx
-    - docker buildx install
+    - apk add --no-cache docker-cli-compose
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - ./mvnw install -PbuildDocker -DskipTests=true -DpushImage
+      -Dhttps.protocols=TLSv1.2
+      -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+      -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
+      -Dorg.slf4j.simpleLogger.showDateTime=true
+      -Djava.awt.headless=true
+      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
     - docker compose build
     - docker compose push
