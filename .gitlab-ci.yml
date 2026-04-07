@@ -57,12 +57,15 @@ package_job:
   stage: package
   image: eclipse-temurin:17-jdk-alpine
   services:
-    - docker:dind
+    - name: docker:dind
+      alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
   script:
     - chmod +x ./mvnw
-    - apk add --no-cache docker-cli-compose
+    - apk add --no-cache docker-cli docker-cli-compose
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - ./mvnw install -PbuildDocker -DskipTests=true -DpushImage
       -Dhttps.protocols=TLSv1.2
