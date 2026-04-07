@@ -73,6 +73,5 @@ package_job:
     - docker buildx install
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - ./mvnw install -PbuildDocker -DskipTests=true -DpushImage
-      ...
     - docker compose build
     - docker compose push
