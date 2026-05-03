@@ -5,38 +5,35 @@ stages:
   - package
 
 cache:
-  key: "$CI_PROJECT_NAME-maven"
   paths:
     - .m2/repository
-
-.maven_common:
-  image: eclipse-temurin:17-jdk-alpine
-  before_script:
-    - chmod +x ./mvnw
+  key: "$CI_JOB_NAME"
 
 build_job:
   stage: build
-  extends: .maven_common
+  image: eclipse-temurin:17-jdk-alpine
   script:
+    - chmod +x ./mvnw
     - ./mvnw compile
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version
+      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
 
 test_job:
   stage: test
-  extends: .maven_common
+  image: eclipse-temurin:17-jdk-alpine
   script:
+    - chmod +x ./mvnw
     - ./mvnw test
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version
+      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
 
 code_quality_job:
   stage: quality
@@ -51,11 +48,11 @@ code_quality_job:
   script:
     - mkdir -p codequality-results
     - docker run
-      --env CODECLIMATE_CODE="$PWD"
-      --volume "$PWD":/code
-      --volume /var/run/docker.sock:/var/run/docker.sock
-      --volume /tmp/cc:/tmp/cc
-      codeclimate/codeclimate analyze -f html > ./codequality-results/index.html
+        --env CODECLIMATE_CODE="$PWD"
+        --volume "$PWD":/code
+        --volume /var/run/docker.sock:/var/run/docker.sock
+        --volume /tmp/cc:/tmp/cc
+        codeclimate/codeclimate analyze -f html > ./codequality-results/index.html
   artifacts:
     paths:
       - codequality-results/
@@ -70,17 +67,18 @@ package_job:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     DOCKER_BUILDKIT: "1"
-  before_script:
+  script:
     - chmod +x ./mvnw
     - apk add --no-cache docker-cli docker-cli-compose docker-cli-buildx
     - docker version
     - docker buildx version
     - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
-  script:
     - ./mvnw install -PbuildDocker -DskipTests=true -DpushImage
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version
+      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
+    - docker compose build
+    - docker compose push
