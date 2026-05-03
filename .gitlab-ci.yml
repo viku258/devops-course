@@ -1,54 +1,61 @@
 stages:
-    - build
-    - test
-    - quality
-    - package
+  - build
+  - test
+  - quality
+  - package
 
 cache:
-    paths:
+  key: "$CI_PROJECT_NAME-maven"
+  paths:
     - .m2/repository
-    key: "$CI_JOB_NAME"
+
+.maven_common:
+  image: eclipse-temurin:17-jdk-alpine
+  before_script:
+    - chmod +x ./mvnw
 
 build_job:
   stage: build
-  image: eclipse-temurin:17-jdk-alpine
+  extends: .maven_common
   script:
-    - chmod +x ./mvnw
     - ./mvnw compile
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
+      --batch-mode --errors --fail-at-end --show-version
 
 test_job:
   stage: test
-  image: eclipse-temurin:17-jdk-alpine
+  extends: .maven_common
   script:
-    - chmod +x ./mvnw
     - ./mvnw test
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
+      --batch-mode --errors --fail-at-end --show-version
 
 code_quality_job:
   stage: quality
   allow_failure: true
-  image: docker:stable
+  image: docker:29.1.3
   services:
-    - docker:dind
+    - name: docker:29.1.3-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   script:
-    - mkdir codequality-results
+    - mkdir -p codequality-results
     - docker run
-        --env CODECLIMATE_CODE="$PWD"
-        --volume "$PWD":/code
-        --volume /var/run/docker.sock:/var/run/docker.sock
-        --volume /tmp/cc:/tmp/cc
-        codeclimate/codeclimate analyze -f html > ./codequality-results/index.html
+      --env CODECLIMATE_CODE="$PWD"
+      --volume "$PWD":/code
+      --volume /var/run/docker.sock:/var/run/docker.sock
+      --volume /tmp/cc:/tmp/cc
+      codeclimate/codeclimate analyze -f html > ./codequality-results/index.html
   artifacts:
     paths:
       - codequality-results/
@@ -57,19 +64,23 @@ package_job:
   stage: package
   image: eclipse-temurin:17-jdk-alpine
   services:
-    - docker:dind
+    - name: docker:29.1.3-dind
+      alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
-  script:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  before_script:
     - chmod +x ./mvnw
-    - apk add --no-cache docker-cli-compose
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - apk add --no-cache docker-cli docker-cli-compose docker-cli-buildx
+    - docker version
+    - docker buildx version
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
+  script:
     - ./mvnw install -PbuildDocker -DskipTests=true -DpushImage
       -Dhttps.protocols=TLSv1.2
       -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
       -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
       -Dorg.slf4j.simpleLogger.showDateTime=true
       -Djava.awt.headless=true
-      --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true
-    - docker compose build
-    - docker compose push
+      --batch-mode --errors --fail-at-end --show-version
