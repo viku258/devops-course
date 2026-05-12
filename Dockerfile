@@ -9,4 +9,4 @@ RUN ./mvnw -B -DskipTests clean install
 
 EXPOSE 8080
 
-CMD ["./mvnw", "spring-boot:run"]
+CMD ["./mvnw", "-pl", "spring-petclinic-api-gateway", "spring-boot:run"]
